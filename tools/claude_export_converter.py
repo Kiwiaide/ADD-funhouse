@@ -124,6 +124,7 @@ _HTML_STYLE = """
     font-size: 0.78em; font-weight: 600; margin-bottom: 6px;
     letter-spacing: 0.03em;
   }
+  .msg-time { font-weight: 400; color: #999; margin-left: 8px; }
   .msg-human { background: #E8F0FA; }
   .msg-human .msg-label { color: #21448A; }
   .msg-claude { background: #FFF3E0; }
@@ -158,8 +159,9 @@ def conv_to_html(conv):
         is_human  = msg.get("sender") == "human"
         cls       = "msg-human" if is_human else "msg-claude"
         label     = "用户" if is_human else "Claude"
+        ts        = html_lib.escape(fmt_time(msg.get("created_at", "")))
         parts.append(f"<div class='msg {cls}'>")
-        parts.append(f"  <div class='msg-label'>{label}</div>")
+        parts.append(f"  <div class='msg-label'>{label}<span class='msg-time'>{ts}</span></div>")
         for btype, text in blocks:
             safe_text = html_lib.escape(text)
             if btype == "thinking":
@@ -185,7 +187,8 @@ def conv_to_md(conv):
         if not blocks:
             continue
         is_human = msg.get("sender") == "human"
-        label = "**用户**" if is_human else "**Claude**"
+        ts = fmt_time(msg.get("created_at", ""))
+        label = f"**用户** ({ts})" if is_human else f"**Claude** ({ts})"
         lines += ["---", label, ""]
         for btype, text in blocks:
             if btype == "thinking":
@@ -316,6 +319,7 @@ def conv_to_docx(conv):
             else RGBColor(0xB4, 0x53, 0x09)
         label_text  = "用户" if is_human else "Claude"
 
+        ts = fmt_time(msg.get("created_at", ""))
         lp = cell.add_paragraph()
         lp.paragraph_format.space_before = Pt(4)
         lp.paragraph_format.space_after  = Pt(2)
@@ -324,6 +328,11 @@ def conv_to_docx(conv):
         lr.font.size  = Pt(9)
         lr.font.color.rgb = label_color
         _cjk(lr)
+        if ts:
+            tr = lp.add_run(f"  {ts}")
+            tr.font.size = Pt(8)
+            tr.font.color.rgb = RGBColor(0x99, 0x99, 0x99)
+            _cjk(tr)
 
         # 正文（区分 thinking 和 text）
         for btype, text in blocks:
@@ -470,14 +479,17 @@ def conv_to_pdf(conv, path):
         is_human = msg.get("sender") == "human"
         label    = "用户" if is_human else "Claude"
 
+        ts = fmt_time(msg.get("created_at", ""))
+        ts_suffix = f"  <font size='7' color='#999999'>{ts}</font>" if ts else ""
+
         if is_human:
-            story.append(Paragraph(label, label_h_style))
+            story.append(Paragraph(f"{label}{ts_suffix}", label_h_style))
             for btype, text in blocks:
                 for line in text.split("\n"):
                     safe = line.replace("&", "&amp;").replace("<", "&lt;")
                     story.append(Paragraph(safe or " ", body_h_style))
         else:
-            story.append(Paragraph(label, label_c_style))
+            story.append(Paragraph(f"{label}{ts_suffix}", label_c_style))
             for btype, text in blocks:
                 if btype == "thinking":
                     story.append(Paragraph("💭 思考过程", think_label_style))
