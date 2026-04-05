@@ -42,6 +42,7 @@ jobs:
     needs: detect-changes
     if: ${{ !contains(needs.detect-changes.outputs.tools, '_none_') }}
     strategy:
+      fail-fast: false
       matrix:
         os: [windows-latest, macos-latest, ubuntu-latest]
         tool: ${{ fromJson(needs.detect-changes.outputs.tools) }}
@@ -68,34 +69,31 @@ jobs:
       - name: Build
         run: |
           cd tools
-          pyinstaller --onefile --windowed --name "${{ matrix.tool }}" "${{ matrix.tool }}.py"
+          if [ "${{ matrix.os }}" = "macos-latest" ]; then
+            pyinstaller --onefile --name "${{ matrix.tool }}" "${{ matrix.tool }}.py"
+          else
+            pyinstaller --onefile --windowed --name "${{ matrix.tool }}" "${{ matrix.tool }}.py"
+          fi
         shell: bash
 
-      - name: Rename artifact
+      - name: Package artifact
         run: |
           cd tools/dist
           if [ "${{ matrix.os }}" = "windows-latest" ]; then
-            SUFFIX="windows.exe"
+            mv "${{ matrix.tool }}.exe" "${{ matrix.tool }}-windows.exe"
           elif [ "${{ matrix.os }}" = "macos-latest" ]; then
-            SUFFIX="macos"
+            mv "${{ matrix.tool }}" "${{ matrix.tool }}-macos"
+            chmod +x "${{ matrix.tool }}-macos"
           else
-            SUFFIX="linux"
+            mv "${{ matrix.tool }}" "${{ matrix.tool }}-linux"
+            chmod +x "${{ matrix.tool }}-linux"
           fi
-          for f in *; do
-            BASE="${f%.*}"
-            EXT="${f##*.}"
-            if [ "$f" = "$BASE" ]; then
-              mv "$f" "${{ matrix.tool }}-${SUFFIX}"
-            else
-              mv "$f" "${{ matrix.tool }}-${SUFFIX}"
-            fi
-          done
         shell: bash
 
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.tool }}-${{ matrix.os }}
-          path: tools/dist/*
+          path: tools/dist/${{ matrix.tool }}-*
 
   release:
     needs: [detect-changes, build]
